@@ -1,61 +1,88 @@
-# Adyen [online payment](https://docs.adyen.com/checkout) integration demos
+# Adyen POC 
 
-This repository includes examples of PCI-compliant UI integrations for online payments with Adyen. Within this demo app, you'll find a simplified version of an e-commerce website, complete with commented code to highlight key features and concepts of Adyen's API. Check out the underlying code to see how you can integrate Adyen to give your shoppers the option to pay with their preferred payment methods, all in a seamless checkout experience.
+Forked from https://github.com/adyen-examples/adyen-golang-online-payments
 
-![Card checkout demo](static/images/cardcheckout.gif)
+POC to demonstrate feasibility of swapping our Stripe integration for Adyen - feature parity: 
 
-## Supported Integrations
-
-**Golang + Gin Gonic** demos of the following client-side integrations are currently available in this repository:
-
-- [Drop-in](https://docs.adyen.com/checkout/drop-in-web)
-- [Component](https://docs.adyen.com/checkout/components-web)
-  - ACH
-  - Card (3DS2)
-  - Dotpay
-  - giropay
-  - iDEAL
-  - Klarna (Pay now, Pay later, Slice it)
-  - SOFORT
-
-Each demo leverages Adyen's API Library for Golang ([GitHub](https://github.com/Adyen/adyen-go-api-library) | [Docs](https://docs.adyen.com/development-resources/libraries#go)).
-
-## Requirements
-
-Golang 1.14+
-
-## Installation
-
-1. Clone this repo:
-
-```
-git clone https://github.com/adyen-examples/adyen-golang-online-payments.git
-```
+- Pay Now
+- Pay Later Delayed Auth
+- Pay Later
+- Applying a charge to each Pay Later mode
 
 ## Usage
 
-1. Create a `./.env` file with your [API key](https://docs.adyen.com/user-management/how-to-get-the-api-key), [Client Key](https://docs.adyen.com/user-management/client-side-authentication) - Remember to add `http://localhost:3000` as an origin for client key, and merchant account name (all credentials are in string format):
+Currently just hacking the code directly - edit for desired flow.
+
+https://docs.adyen.com/development-resources/test-cards/test-card-numbers#test-3d-secure-2-authentication
+
+### Adyen account setup
+
+ - Disable Risk - in Risk settings (make sure a merchant is selected)
+ - Account - API URLS - Additional Data Settings - check following:
+   - Cardholder name
+   - Shopper country
+   - Card summary
+   - Expiry date
+   - Variant
+   - Token information for digital wallets (e.g ApplePay)
+   - Recurring details
+  
+Recurring details is only mandatory setting - the others would need checking.
+
+## Food for thought
+
+- implementation would be a case of exposing a few endpoints - its not too complex imo.
+- its a different flow - UI driven and not async like Stripe
+- it feels like there is more room for error - Stripe abstracts a lot of this away. 3DS for example - v1 and v2, journeys that dont require 3DS need special handling. This will need thorough testing.
+- any Stripe derived data must be persisted in API - profile, credit card? we now have a user-repository so maybe a sensible step anyway - even for Stripe
+- we should rename our current em-payment service to em-payment-stripe and move to an event driven flow
+
+## Stripe cryptogram expiry
+
+Not sure we got correct info from Stripe on this: https://ennismore.atlassian.net/browse/DEV-1895
+
+## Moving Stripe to a sync flow 
+
+I am definitely edging to moving away from our current webhook flow.....
+
+If we implemented idempotency so for a single booking id you always get the same stripe intent id - then the UI attempted a second payment (after already completing and then failing API call to confirm) Stripe will error:
 
 ```
-API_KEY="your_API_key_here"
-MERCHANT_ACCOUNT="your_merchant_account_here"
-CLIENT_KEY="your_client_key_here"
+{
+  "error": {
+    "code": "payment_intent_unexpected_state",
+    "doc_url": "https://stripe.com/docs/error-codes/payment-intent-unexpected-state",
+    "message": "You cannot confirm this PaymentIntent because it has already succeeded after being previously confirmed.",
+    "payment_intent": {
+      "id": "pi_1J7yjkIB01GFU0AGEDL0ZiMs",
+      "object": "payment_intent",
+      "amount": 65000,
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "capture_method": "automatic",
+      "client_secret": "pi_1J7yjkIB01GFU0AGEDL0ZiMs_secret_RKaOaVlxVtLS83zBx4UxiYlij",
+      "confirmation_method": "automatic",
+      "created": 1625041536,
+      "currency": "gbp",
+      "description": null,
+      "last_payment_error": null,
+      "livemode": false,
+      "next_action": null,
+      "payment_method": "pm_1J7yzDIB01GFU0AGVYA2qN5c",
+      "payment_method_types": [
+        "card"
+      ],
+      "receipt_email": null,
+      "setup_future_usage": null,
+      "shipping": null,
+      "source": null,
+      "status": "succeeded"
+    },
+    "type": "invalid_request_error"
+  }
+}
 ```
 
-2. Start the server:
+UI could handle this appropriately - in this case just skipping and attempt the confirm again.
 
-```
-go run -v .
-```
-
-3. Visit [http://localhost:3000/](http://localhost:3000/) to select an integration type.
-
-To try out integrations with test card numbers and payment method details, see [Test card numbers](https://docs.adyen.com/development-resources/test-cards/test-card-numbers).
-
-## Contributing
-
-We commit all our new features directly into our GitHub repository. Feel free to request or suggest new features or code changes yourself as well!
-
-## License
-
-MIT license. For more information, see the **LICENSE** file in the root directory.
+The benefit is the UI should get detailed error from confirm - so he could then handle this specifically too. Instead of polling for a generic PAYMENT_ERROR state. Tbh - this state is even wrong - it should be CONFIRM_ERROR or similar.

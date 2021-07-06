@@ -26,11 +26,13 @@ async function initCheckout() {
       },
       onSubmit: (state, component) => {
         if (state.isValid) {
+          console.log("onSubmit");
           handleSubmission(state, component, "/api/initiatePayment");
         }
       },
       onAdditionalDetails: (state, component) => {
-        handleSubmission(state, component, "/api/submitAdditionalDetails");
+        console.log("onAdditionalDetails");
+        handleApiCall(state, component, "/api/submitAdditionalDetails");
       },
     };
 
@@ -47,6 +49,17 @@ function filterUnimplemented(pm) {
     ["ach", "scheme", "dotpay", "giropay", "ideal", "directEbanking", "klarna_paynow", "klarna", "klarna_account"].includes(it.type)
   );
   return pm;
+}
+
+async function handleApiCall(state, component, url) {
+  try {
+    const res = await callServer(url, state.data);
+    console.log(res);
+    await handleSubmission(state, component, "/api/confirm");
+  } catch (error) {
+    console.error(error);
+    alert("Error occurred. Look at console for details");
+  }
 }
 
 // Event handlers called when the shopper selects the pay button,
@@ -71,6 +84,7 @@ async function callServer(url, data) {
     },
   });
 
+  console.log(`callServer ::: ${res}`);
   return await res.json();
 }
 
@@ -80,9 +94,12 @@ function handleServerResponse(res, component) {
     component.handleAction(res.action);
   } else {
     switch (res.resultCode) {
+      case "Confirmed":
       case "Authorised":
+      case "AuthenticationNotRequired":
         window.location.href = "/result/success";
         break;
+      case "AuthenticationFinished":
       case "Pending":
       case "Received":
         window.location.href = "/result/pending";

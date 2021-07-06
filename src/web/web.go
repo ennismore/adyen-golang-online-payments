@@ -51,11 +51,13 @@ func CheckoutHandler(c *gin.Context) {
 
 // ResultHandler serves the result.html page
 func ResultHandler(c *gin.Context) {
-	log.Println("Loading result page")
-
 	status := c.Param("status")
 	refusalReason := c.Query("reason")
+
+  log.Printf("Loading result page %s %s\n", status, refusalReason)
+
 	var msg, img string
+
 	switch status {
 	case "pending":
 		msg = "Your order has been received! Payment completion pending."
