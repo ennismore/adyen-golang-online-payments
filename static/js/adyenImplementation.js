@@ -1,11 +1,15 @@
 const clientKey = document.getElementById("clientKey").innerHTML;
 const type = document.getElementById("type").innerHTML;
 
+const booking_id = "e4c7d8e125cbb42bacff1ff5a230f1edb63b6cd8";
+
 async function initCheckout() {
   try {
-    const paymentMethodsResponse = await callServer("/api/getPaymentMethods", {});
+    //this can be cached....according to docs
+    const paymentMethodsResponse = await callBookingEngineApi("/payments/adyen", {});
+    var adyenResponse = JSON.parse(atob(paymentMethodsResponse.raw))
     const configuration = {
-      paymentMethodsResponse: filterUnimplemented(paymentMethodsResponse),
+      paymentMethodsResponse: filterUnimplemented(adyenResponse),
       clientKey,
       locale: "en_US",
       environment: "test",
@@ -27,12 +31,25 @@ async function initCheckout() {
       onSubmit: (state, component) => {
         if (state.isValid) {
           console.log("onSubmit");
-          handleSubmission(state, component, "/api/initiatePayment");
+          payload = {
+            metadata: {
+              email: "mryan321+adyen@gmail.com",
+              booking_id: booking_id,
+              charity: 3,
+              comment: "special requests..."
+            },
+            raw: state.data
+          }
+          handleBookingEngineSubmission(payload, component, "/payments/adyen/new", false);
         }
       },
       onAdditionalDetails: (state, component) => {
         console.log("onAdditionalDetails");
-        handleApiCall(state, component, "/api/submitAdditionalDetails");
+        payload = {
+          booking_id: booking_id,
+          raw: state.data
+        }
+        handleBookingEngineSubmission(payload, component, "/payments/adyen/additional-details", true);
       },
     };
 
@@ -80,6 +97,37 @@ async function callServer(url, data) {
     method: "POST",
     body: data ? JSON.stringify(data) : "",
     headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  console.log(`callServer ::: ${res}`);
+  return await res.json();
+}
+
+async function handleBookingEngineSubmission(payload, component, url, confirm) {
+  try {
+    const res = await callBookingEngineApi(url, payload);
+    var adyenResponse = JSON.parse(atob(res.raw))
+
+    if (confirm) {
+      const res = await callBookingEngineApi("/payments/adyen/confirm", {booking_id: booking_id});
+      console.debug(res)
+    }
+
+    handleServerResponse(adyenResponse, component);
+  } catch (error) {
+    console.error(error);
+    alert("Error occurred. Look at console for details");
+  }
+}
+
+async function callBookingEngineApi(url, data) {
+  const res = await fetch(`http://localhost:8000/v2${url}`, {
+    method: "POST",
+    body: data ? JSON.stringify(data) : "",
+    headers: {
+      "X-Api-Key": "op6RBIpH81ER1kpb28tF",
       "Content-Type": "application/json",
     },
   });
