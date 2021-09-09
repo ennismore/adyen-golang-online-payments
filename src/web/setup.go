@@ -11,7 +11,6 @@ import (
 
 var (
 	client            *adyen.APIClient
-	merchantAccount   string
 )
 
 func Init() {
@@ -22,8 +21,6 @@ func Init() {
 		Environment: common.TestEnv,
     //Debug: true,
 	})
-
-	merchantAccount = os.Getenv("MERCHANT_ACCOUNT")
 
 	// Set the router as the default one shipped with Gin
 	router := gin.Default()

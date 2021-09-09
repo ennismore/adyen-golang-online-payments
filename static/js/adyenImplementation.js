@@ -1,7 +1,7 @@
 const clientKey = document.getElementById("clientKey").innerHTML;
 const type = document.getElementById("type").innerHTML;
 
-const booking_id = "e4c7d8e125cbb42bacff1ff5a230f1edb63b6cd8";
+const booking_id = "823ba3da78e5324e77f7a96259218bf788df3930";
 
 async function initCheckout() {
   try {
@@ -33,23 +33,39 @@ async function initCheckout() {
           console.log("onSubmit");
           payload = {
             metadata: {
-              email: "mryan321+adyen@gmail.com",
+              //https://github.com/ennismore/em-domain/blob/65c4ceaecca0e894106534d6cb1c62c35a387e65/clients/typescript-fetch/api.ts#L2070
               booking_id: booking_id,
+              comment: "special requests...",
               charity: 3,
-              comment: "special requests..."
+              flexy_time: { check_in: "HOUR_0_TO_1", check_out: "HOUR_17_TO_18" },
+              dog: false,
+              cot: "COT",
+              special_assistance: true,
+              title: "MR",
+              email: "mryan321+adyen@gmail.com",
+              marketing_opt_in: true,
+              first_name: "Mark",
+              last_name: "Testing",
+              address_line_1: "123 The Street",
+              city: "The City",
+              state: "The State",
+              country: "GB",
+              post_code: "AB1 2CD",
+              phone: "0123456789"
             },
             raw: state.data
           }
-          handleBookingEngineSubmission(payload, component, "/payments/adyen/new", false);
+          handleBookingEngineSubmission(payload, component, "/payments/adyen/new");
         }
       },
       onAdditionalDetails: (state, component) => {
+        //3ds
         console.log("onAdditionalDetails");
         payload = {
           booking_id: booking_id,
           raw: state.data
         }
-        handleBookingEngineSubmission(payload, component, "/payments/adyen/additional-details", true);
+        handleBookingEngineSubmission(payload, component, "/payments/adyen/additional-details");
       },
     };
 
@@ -68,53 +84,10 @@ function filterUnimplemented(pm) {
   return pm;
 }
 
-async function handleApiCall(state, component, url) {
-  try {
-    const res = await callServer(url, state.data);
-    console.log(res);
-    await handleSubmission(state, component, "/api/confirm");
-  } catch (error) {
-    console.error(error);
-    alert("Error occurred. Look at console for details");
-  }
-}
-
-// Event handlers called when the shopper selects the pay button,
-// or when additional information is required to complete the payment
-async function handleSubmission(state, component, url) {
-  try {
-    const res = await callServer(url, state.data);
-    handleServerResponse(res, component);
-  } catch (error) {
-    console.error(error);
-    alert("Error occurred. Look at console for details");
-  }
-}
-
-// Calls your server endpoints
-async function callServer(url, data) {
-  const res = await fetch(url, {
-    method: "POST",
-    body: data ? JSON.stringify(data) : "",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  console.log(`callServer ::: ${res}`);
-  return await res.json();
-}
-
 async function handleBookingEngineSubmission(payload, component, url, confirm) {
   try {
     const res = await callBookingEngineApi(url, payload);
     var adyenResponse = JSON.parse(atob(res.raw))
-
-    if (confirm) {
-      const res = await callBookingEngineApi("/payments/adyen/confirm", {booking_id: booking_id});
-      console.debug(res)
-    }
-
     handleServerResponse(adyenResponse, component);
   } catch (error) {
     console.error(error);
@@ -137,19 +110,24 @@ async function callBookingEngineApi(url, data) {
 }
 
 // Handles responses sent from your server to the client
-function handleServerResponse(res, component) {
+async function handleServerResponse(res, component) {
   if (res.action) {
     component.handleAction(res.action);
   } else {
+    let confirmResp;
     switch (res.resultCode) {
       case "Confirmed":
       case "Authorised":
       case "AuthenticationNotRequired":
+        confirmResp = await callBookingEngineApi("/payments/adyen/confirm", {booking_id: booking_id});
+        console.debug(confirmResp)
         window.location.href = "/result/success";
         break;
       case "AuthenticationFinished":
       case "Pending":
       case "Received":
+        confirmResp = await callBookingEngineApi("/payments/adyen/confirm", {booking_id: booking_id});
+        console.debug(confirmResp)
         window.location.href = "/result/pending";
         break;
       case "Refused":
